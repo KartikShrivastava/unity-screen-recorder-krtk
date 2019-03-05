@@ -103,17 +103,15 @@ public class AndroidUtils extends UnityPlayerActivity {
         if(mRecorder == null){
             mRecorder = new MediaRecorder();
         }
-        //this.mRecorder.setAudioSource(1);       //8: remote_submix(requires CAPTURE_AUDIO_OUTPUT permission) 1: mic this.mRecorder.setAudioSource(1);
         mRecorder.setVideoSource(2);
         mRecorder.setOutputFormat(2);
         mRecorder.setVideoEncoder(2);
         mRecorder.setOutputFile(this.mFilePath);
         mRecorder.setVideoSize(screenWidth, screenHeight);
-        //this.mRecorder.setAudioEncoder(3);     //use this if you want to record mic audio instead of internal audio from unity
         mRecorder.setVideoFrameRate(this.mFps);
-        mRecorder.setVideoEncodingBitRate(1000000);
+        mRecorder.setVideoEncodingBitRate(4000000);     //1000000
         mRecorder.prepare();
-        //mRecorder.start();
+        mRecorder.start();
     }
 
     private void shareScreen() {    //this func init thr ProjectionManager to create a virtual Display and start record screen
@@ -123,6 +121,7 @@ public class AndroidUtils extends UnityPlayerActivity {
             return;
         }
         this.mVirtualDisplay = createVirtualDisplay();
+        UnityPlayer.UnitySendMessage(mGameObject,mMethodName, "FLAG_StartRecorder");
     }
 
     private VirtualDisplay createVirtualDisplay() {
@@ -130,36 +129,23 @@ public class AndroidUtils extends UnityPlayerActivity {
     }
 
     public void startRecording() {    //this func is used by Unity side to start recording
-
         mRecorder.start();
         //UnityPlayer.UnitySendMessage(mGameObject,mMethodName, "start_record");
     }
 
     public void stopRecording() {    //this func is used by Unity side to stop recording
-
-        this.mVirtualDisplay.release();
-        if (this.mMediaProjection != null) {
-            this.mMediaProjection.stop();
-            this.mMediaProjection = null;
-        }
-        mRecorder.stop();
-        mRecorder.reset();
-        mRecorder.release();
-        mRecorder = null;
-        UnityPlayer.UnitySendMessage(this.mGameObject, this.mMethodName, "stop_record");
-
-        convertToAAC(this.mAppDir + "/sound.wav");
+        StopRecorderRunnable runnable = new StopRecorderRunnable();
+        new Thread(runnable).start();
     }
 
     public void cleanUpRecorder() {    //use this function when you don't use record anymore
-
-        this.mVirtualDisplay.release();
+        /*this.mVirtualDisplay.release();
         if (this.mMediaProjection != null) {
             this.mMediaProjection.stop();
             this.mMediaProjection = null;
         }
         mRecorder.release();
-        mRecorder = null;
+        mRecorder = null;*/
     }
 
     private void addRecordingToMediaLibrary() {    //this func move the recorded video to gallery
@@ -169,7 +155,7 @@ public class AndroidUtils extends UnityPlayerActivity {
         values.put("mime_type", "video/mp4");
         values.put("_data", this.mFilePath);
         getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
-        Toast.makeText(this, "Video has saved to gallery", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Video is saved to gallery", Toast.LENGTH_SHORT).show();
     }
 
     public void openGallery(){
@@ -286,12 +272,12 @@ public class AndroidUtils extends UnityPlayerActivity {
             fc.close();
             Log.d("Tenth", "mergeMP4withAAC 7");
 
-            Toast.makeText(this, "Video is saved to gallery", Toast.LENGTH_SHORT).show();
+            //Toast.makeText(this, "Video is saved to gallery", Toast.LENGTH_SHORT).show();
 
             refreshGallery(outputFile.getAbsolutePath());
         } catch (Exception e) {
             Log.e("YOUR_APP_LOG_TAG", "I got an error", e);
-            Toast.makeText(this, "Failed to save video", Toast.LENGTH_SHORT).show();
+            //Toast.makeText(this, "Failed to save video", Toast.LENGTH_SHORT).show();
         }
         //return outputFile.exists();
     }
@@ -306,5 +292,25 @@ public class AndroidUtils extends UnityPlayerActivity {
                         Log.i("TAG", "Finished scanning " + path);
                     }
                 });
+
+        UnityPlayer.UnitySendMessage(this.mGameObject, this.mMethodName, filePath);
+    }
+
+    class StopRecorderRunnable implements Runnable{
+        @Override
+        public void run(){
+            mVirtualDisplay.release();
+            if (mMediaProjection != null) {
+                mMediaProjection.stop();
+                mMediaProjection = null;
+            }
+            mRecorder.stop();
+            mRecorder.reset();
+            mRecorder.release();
+            mRecorder = null;
+
+            convertToAAC(mAppDir + "/sound.wav");
+            //UnityPlayer.UnitySendMessage(mGameObject, mMethodName, "FLAG_VideoSaved");
+        }
     }
 }
